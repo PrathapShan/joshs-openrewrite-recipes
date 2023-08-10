@@ -31,7 +31,7 @@ dependencies {
     // You only need the version that corresponds to your current
     // Java version. It is fine to add all of them, though, as
     // they can coexist on a classpath.
-    runtimeOnly("org.openrewrite:rewrite-java-8")
+
     runtimeOnly("org.openrewrite:rewrite-java-11")
     runtimeOnly("org.openrewrite:rewrite-java-17")
 

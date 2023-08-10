@@ -3,9 +3,10 @@ package aot.recipe;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.openrewrite.ExecutionContext;
-import org.openrewrite.ScanningRecipe;
-import org.openrewrite.SourceFile;
+import org.openrewrite.Recipe;
 import org.openrewrite.TreeVisitor;
+import org.openrewrite.java.JavaParser;
+import org.openrewrite.java.JavaTemplate;
 import org.openrewrite.java.JavaVisitor;
 import org.openrewrite.java.tree.J;
 import org.openrewrite.java.tree.TypeUtils;
@@ -15,9 +16,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.aot.hint.RuntimeHints;
 
 import java.io.Serializable;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
 
 /*
 * At a high level, you will want to extend ScanningRecipe  with these broad steps:
@@ -29,38 +27,46 @@ import java.util.Set;
 */
 @Data
 @EqualsAndHashCode(callSuper = false)
-public class SerializationAotHintsRecipe extends ScanningRecipe<Set<J.ClassDeclaration>> {
+public class SerializationAotHintsRecipe extends Recipe {
 
 
     private static Logger log = LoggerFactory.getLogger(SerializationAotHintsRecipe.class);
 
     @Override
-    public Set<J.ClassDeclaration> getInitialValue(ExecutionContext ctx) {
-        return new HashSet<>();
-    }
-
-    @Override
-    public TreeVisitor<?, ExecutionContext> getScanner(Set<J.ClassDeclaration> acc) {
-        return new SerializableIsoVisitor(acc);
-    }
-
-    @Override
-    public TreeVisitor<?, ExecutionContext> getVisitor(Set<J.ClassDeclaration> acc) {
-        return super.getVisitor(acc);
-    }
-
-    @Override
-    public Collection<? extends SourceFile> generate(Set<J.ClassDeclaration> acc, Collection<SourceFile> generatedInThisCycle, ExecutionContext ctx) {
-        log.info("running generate(" + acc.getClass().getName() + " " + generatedInThisCycle + ")");
-        return super.generate(acc, generatedInThisCycle, ctx);
+    public TreeVisitor<?, ExecutionContext> getVisitor() {
+        return new SerializableIsoVisitor();
     }
 
     static class SerializableIsoVisitor extends JavaVisitor<ExecutionContext> {
 
-        private final Set<J.ClassDeclaration> classDeclarations;
+        @Override
+        public J visitBlock(J.Block block, ExecutionContext executionContext) {
+            var parent = getCursor().getParent().getValue();
+            var code = """
+                      static class Hints implements org.springframework.aot.hint.RuntimeHintsRegistrar {
+                                      
+                                    @Override
+                                    public void registerHints(org.springframework.aot.hint.RuntimeHints hints, java.lang.ClassLoader classLoader) {
+                                        hints.serialization().registerType(org.springframework.aot.hint.TypeReference.of(""));
+                                    }
+                                }
+                    """;
+            var seen = executionContext.getMessage("seen", null);
+            if (parent instanceof J.ClassDeclaration classDeclaration && seen.equals(classDeclaration.getId())) {
+                var markers = classDeclaration.getName().getMarkers();
+                var searchResult = markers.findFirst(SearchResult.class);
+                if (searchResult.isEmpty()) {
+                    log.info("found " + seen);
+                    var builder = JavaTemplate.builder(code).javaParser(JavaParser.fromJavaVersion()
+                            .classpath("spring-core")
+                    );
+                    var javaTemplate = builder.build();
+                    return javaTemplate.apply(getCursor(), block.getCoordinates().lastStatement());
 
-        SerializableIsoVisitor(Set<J.ClassDeclaration> classDeclarations) {
-            this.classDeclarations = classDeclarations;
+                }
+            }
+
+            return super.visitBlock(block, executionContext);
         }
 
         @Override
@@ -68,23 +74,16 @@ public class SerializationAotHintsRecipe extends ScanningRecipe<Set<J.ClassDecla
                 J.ClassDeclaration classDecl,
                 ExecutionContext executionContext) {
 
-            var newClassDeclaration = (J.ClassDeclaration) super.visitClassDeclaration(classDecl, executionContext);
-            var seen = !newClassDeclaration.getMarkers().entries().isEmpty();
-            if (seen) {
-                return newClassDeclaration;
+            var seen = !classDecl.getName().getMarkers().entries().isEmpty();
+            var serializable = TypeUtils.isAssignableTo(Serializable.class.getName(), classDecl.getType());
+            if (!seen && serializable) {
+                executionContext.putMessage("seen", classDecl.getId());
+                classDecl = classDecl.withName(SearchResult.found(classDecl.getName(), "the class %s was found".formatted(classDecl.getName())));
             }
-            var serializable = TypeUtils.isAssignableTo(Serializable.class.getName(), newClassDeclaration.getType());
-            if (serializable) {
-                var result = classDecl.withName(SearchResult.found(classDecl.getName(), "the class %s was found".formatted(classDecl.getName())));
-                log.info(result.print());
-                this.classDeclarations.add(result);
-                return result;
-            }
-
-
-            return newClassDeclaration;
-
+            return (J.ClassDeclaration) super.visitClassDeclaration(classDecl, executionContext);
         }
+
+
     }
 
 
