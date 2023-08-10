@@ -39,7 +39,7 @@ class SerializationAotHintsRecipeTest implements RewriteTest {
                 import org.springframework.aot.hint.TypeReference;
                 import org.springframework.context.annotation.ImportRuntimeHints;
                                 
-                @ImportRuntimeHints(FooBar.FooBarHints.class)class /*~~(the class FooBar was found)~~>*/FooBar  implements  java.io.Serializable {
+                @ImportRuntimeHints(FooBar.FooBarHints.class)class FooBar  implements  java.io.Serializable {
 
                     void foo (){ }
 
@@ -47,12 +47,13 @@ class SerializationAotHintsRecipeTest implements RewriteTest {
 
                         @Override
                         public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-                            hints.serialization().registerType(TypeReference.of(""));
+                            hints.serialization().registerType(TypeReference.of("com.yourorg.FooBar"));
                         }
                     }
                 }
                 """;
         rewriteRun(java(before, after));
+
     }
 
 /*
