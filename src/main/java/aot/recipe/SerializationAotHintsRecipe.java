@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.aot.hint.TypeReference;
+import org.springframework.context.annotation.ImportRuntimeHints;
+import org.springframework.util.Assert;
 
 import java.io.Serializable;
 
@@ -40,14 +42,13 @@ public class SerializationAotHintsRecipe extends Recipe {
     }
 
 
-
     static class SerializableIsoVisitor extends JavaVisitor<ExecutionContext> {
 
         @Override
         public J visitBlock(J.Block block, ExecutionContext executionContext) {
             var parent = getCursor().getParent().getValue();
             var code = """
-                      static class Hints implements RuntimeHintsRegistrar {
+                      static class %s implements RuntimeHintsRegistrar {
                                       
                                     @Override
                                     public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
@@ -61,7 +62,9 @@ public class SerializationAotHintsRecipe extends Recipe {
                 var searchResult = markers.findFirst(SearchResult.class);
                 if (searchResult.isEmpty()) {
                     log.info("found " + seen);
-                    var builder = JavaTemplate.builder(code).javaParser(JavaParser.fromJavaVersion()
+                    var simpleNames = executionContext.getMessage("simpleName");
+                    Assert.state(simpleNames instanceof String, "the simpleName should be a String!");
+                    var builder = JavaTemplate.builder(code.formatted(simpleNames)).javaParser(JavaParser.fromJavaVersion()
                             .classpath("spring-core")
                     );
                     var topLevelImports = new String[]{RuntimeHints.class.getName(),
@@ -74,10 +77,8 @@ public class SerializationAotHintsRecipe extends Recipe {
                     for (var p : topLevelImports)
                         maybeAddImport(p);
                     return javaTemplate.apply(getCursor(), block.getCoordinates().lastStatement());
-
                 }
             }
-
             return super.visitBlock(block, executionContext);
         }
 
@@ -88,11 +89,34 @@ public class SerializationAotHintsRecipe extends Recipe {
 
             var seen = !classDecl.getName().getMarkers().entries().isEmpty();
             var serializable = TypeUtils.isAssignableTo(Serializable.class.getName(), classDecl.getType());
-            if (!seen && serializable) {
+            var simpleNameForHintsClass = classDecl.getSimpleName() + "Hints";
+            var validClass = !seen && serializable;
+            if (validClass) {
                 executionContext.putMessage("seen", classDecl.getId());
-                classDecl = classDecl.withName(SearchResult.found(classDecl.getName(), "the class %s was found".formatted(classDecl.getName())));
+                executionContext.putMessage("simpleName", simpleNameForHintsClass);
+                executionContext.putMessage("parentSimpleName", classDecl.getSimpleName());
+                classDecl = classDecl
+                        .withName(SearchResult.found(classDecl.getName(), "the class %s was found".formatted(classDecl.getName())));
             }
-            return (J.ClassDeclaration) super.visitClassDeclaration(classDecl, executionContext);
+
+            // @ImportRuntimeHints (FooBar.FooBarHints.class)
+
+            var newClassDeclaration = (J.ClassDeclaration) super.visitClassDeclaration(classDecl, executionContext);
+            var runtimeHintsRegistrarAnnotationFqn = ImportRuntimeHints.class.getName();
+            if (validClass && !newClassDeclaration.getLeadingAnnotations().stream()
+                    .anyMatch(a -> runtimeHintsRegistrarAnnotationFqn.equals(TypeUtils.asFullyQualified(a.getType())))) {
+                JavaTemplate.Builder builder = JavaTemplate.builder("@ImportRuntimeHints(%s.%s.class)".formatted(
+                                classDecl.getSimpleName(), simpleNameForHintsClass))
+                        .javaParser(JavaParser.fromJavaVersion().classpath("spring-context"));
+                JavaTemplate javaTemplate = builder.imports(runtimeHintsRegistrarAnnotationFqn).build();
+
+                J.ClassDeclaration templateClass = javaTemplate.apply(getCursor(), newClassDeclaration.getCoordinates().addAnnotation((o1, o2) -> 0));
+                newClassDeclaration = newClassDeclaration.withLeadingAnnotations(templateClass.getLeadingAnnotations());
+                maybeAddImport(runtimeHintsRegistrarAnnotationFqn);
+            }
+
+
+            return newClassDeclaration;
         }
 
 

@@ -37,12 +37,13 @@ class SerializationAotHintsRecipeTest implements RewriteTest {
                 import org.springframework.aot.hint.RuntimeHints;
                 import org.springframework.aot.hint.RuntimeHintsRegistrar;
                 import org.springframework.aot.hint.TypeReference;
-                
-                class /*~~(the class FooBar was found)~~>*/FooBar  implements  java.io.Serializable {
+                import org.springframework.context.annotation.ImportRuntimeHints;
+                                
+                @ImportRuntimeHints(FooBar.FooBarHints.class)class /*~~(the class FooBar was found)~~>*/FooBar  implements  java.io.Serializable {
 
                     void foo (){ }
 
-                    static class Hints implements RuntimeHintsRegistrar {
+                    static class FooBarHints implements RuntimeHintsRegistrar {
 
                         @Override
                         public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
