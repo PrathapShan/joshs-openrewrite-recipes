@@ -14,6 +14,8 @@ import org.openrewrite.marker.SearchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.aot.hint.TypeReference;
 
 import java.io.Serializable;
 
@@ -37,17 +39,19 @@ public class SerializationAotHintsRecipe extends Recipe {
         return new SerializableIsoVisitor();
     }
 
+
+
     static class SerializableIsoVisitor extends JavaVisitor<ExecutionContext> {
 
         @Override
         public J visitBlock(J.Block block, ExecutionContext executionContext) {
             var parent = getCursor().getParent().getValue();
             var code = """
-                      static class Hints implements org.springframework.aot.hint.RuntimeHintsRegistrar {
+                      static class Hints implements RuntimeHintsRegistrar {
                                       
                                     @Override
-                                    public void registerHints(org.springframework.aot.hint.RuntimeHints hints, java.lang.ClassLoader classLoader) {
-                                        hints.serialization().registerType(org.springframework.aot.hint.TypeReference.of(""));
+                                    public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+                                        hints.serialization().registerType(TypeReference.of(""));
                                     }
                                 }
                     """;
@@ -60,7 +64,15 @@ public class SerializationAotHintsRecipe extends Recipe {
                     var builder = JavaTemplate.builder(code).javaParser(JavaParser.fromJavaVersion()
                             .classpath("spring-core")
                     );
-                    var javaTemplate = builder.build();
+                    var topLevelImports = new String[]{RuntimeHints.class.getName(),
+                            ClassLoader.class.getName(),
+                            RuntimeHintsRegistrar.class.getName(),
+                            TypeReference.class.getName()};
+                    var javaTemplate = builder
+                            .imports(topLevelImports)
+                            .build();
+                    for (var p : topLevelImports)
+                        maybeAddImport(p);
                     return javaTemplate.apply(getCursor(), block.getCoordinates().lastStatement());
 
                 }

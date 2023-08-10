@@ -33,16 +33,20 @@ class SerializationAotHintsRecipeTest implements RewriteTest {
 
         var after = """
                 package com.yourorg;
-
+                
+                import org.springframework.aot.hint.RuntimeHints;
+                import org.springframework.aot.hint.RuntimeHintsRegistrar;
+                import org.springframework.aot.hint.TypeReference;
+                
                 class /*~~(the class FooBar was found)~~>*/FooBar  implements  java.io.Serializable {
 
                     void foo (){ }
 
-                    static class Hints implements org.springframework.aot.hint.RuntimeHintsRegistrar {
+                    static class Hints implements RuntimeHintsRegistrar {
 
                         @Override
-                        public void registerHints(org.springframework.aot.hint.RuntimeHints hints, java.lang.ClassLoader classLoader) {
-                            hints.serialization().registerType(org.springframework.aot.hint.TypeReference.of(""));
+                        public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+                            hints.serialization().registerType(TypeReference.of(""));
                         }
                     }
                 }
