@@ -47,7 +47,7 @@ public class SerializationAotHintsRecipe extends Recipe {
             var parent = getCursor().getParent().getValue();
 
             var seen = executionContext.getMessage("seen", null);
-            if ( seen!=null && parent instanceof J.ClassDeclaration classDeclaration && seen.equals(classDeclaration.getId())) {
+            if (seen != null && parent instanceof J.ClassDeclaration classDeclaration && seen.equals(classDeclaration.getId())) {
                 var simpleNames = executionContext.getMessage("simpleName");
                 var code = """
                           static class %s implements RuntimeHintsRegistrar {
@@ -103,16 +103,13 @@ public class SerializationAotHintsRecipe extends Recipe {
             var runtimeHintsRegistrarAnnotationFqn = ImportRuntimeHints.class.getName();
             if (validClass && !newClassDeclaration.getLeadingAnnotations().stream()
                     .anyMatch(a -> runtimeHintsRegistrarAnnotationFqn.equals(TypeUtils.asFullyQualified(a.getType())))) {
-                JavaTemplate.Builder builder = JavaTemplate.builder("@ImportRuntimeHints(%s.%s.class) ".formatted(
+                var builder = JavaTemplate.builder("@ImportRuntimeHints(%s.%s.class) ".formatted(
                                 classDecl.getSimpleName(), simpleNameForHintsClass))
                         .javaParser(JavaParser.fromJavaVersion().classpath("spring-context"));
-                JavaTemplate javaTemplate = builder.imports(runtimeHintsRegistrarAnnotationFqn).build();
-                J.ClassDeclaration templateClass = javaTemplate.apply(getCursor(), newClassDeclaration.getCoordinates().addAnnotation((o1, o2) -> 0));
+                var javaTemplate = builder.imports(runtimeHintsRegistrarAnnotationFqn).build();
+                var templateClass = (J.ClassDeclaration) javaTemplate.apply(getCursor(), newClassDeclaration.getCoordinates().addAnnotation((o1, o2) -> 0));
                 newClassDeclaration = newClassDeclaration.withLeadingAnnotations(templateClass.getLeadingAnnotations());
                 maybeAddImport(runtimeHintsRegistrarAnnotationFqn);
-                autoFormat(newClassDeclaration, executionContext);
-                log.info(newClassDeclaration.print());
-
             }
 
             return newClassDeclaration;
