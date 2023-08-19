@@ -20,11 +20,11 @@ import org.springframework.context.annotation.ImportRuntimeHints;
 import java.io.Serializable;
 
 /**
- * //* At a high level, you will want to extend ScanningRecipe  with these broad steps:
- * //    Define an accumulator class which can store whatever data you want it to so that:
- * //    Override getScanner() to return a visitor which identifies whether the thing you are visiting meets your criteria, and records that result in the accumulator you defined in step 1
- * //    Override generate() to create new source files as necessary. You can instantiate a JavaParser inline with JavaParser.fromJavaVersion() if you need to create a new class from scratch
- * //    Override getVisitor() to perform any other modifications which are necessary
+ * At a high level, you will want to extend ScanningRecipe  with these broad steps:
+ * Define an accumulator class which can store whatever data you want it to so that:
+ * Override getScanner() to return a visitor which identifies whether the thing you are visiting meets your criteria, and records that result in the accumulator you defined in step 1
+ * Override generate() to create new source files as necessary. You can instantiate a JavaParser inline with JavaParser.fromJavaVersion() if you need to create a new class from scratch
+ * Override getVisitor() to perform any other modifications which are necessary
  *
  * @author Alex Boyko
  * @author Josh Long
@@ -33,26 +33,12 @@ import java.io.Serializable;
 @EqualsAndHashCode(callSuper = false)
 public class SerializationAotHintsRecipe extends Recipe {
 
-
     private static Logger log = LoggerFactory.getLogger(SerializationAotHintsRecipe.class);
 
     @Override
     public TreeVisitor<?, ExecutionContext> getVisitor() {
         return new SerializableIsoVisitor();
     }
-
-
-/*
-    class MyHints implements RuntimeHintsRegistrar {
-
-        @Override
-        public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-            hints.serialization().registerType(TypeReference.of("a.b.c.C"));
-            var r = new ClassPathResource("/foo");
-            hints.resources().registerResource(r);
-        }
-    }
-*/
 
     static class SerializableIsoVisitor extends JavaVisitor<ExecutionContext> {
 
@@ -61,7 +47,7 @@ public class SerializationAotHintsRecipe extends Recipe {
             var parent = getCursor().getParent().getValue();
 
             var seen = executionContext.getMessage("seen", null);
-            if (parent instanceof J.ClassDeclaration classDeclaration && seen.equals(classDeclaration.getId())) {
+            if ( seen!=null && parent instanceof J.ClassDeclaration classDeclaration && seen.equals(classDeclaration.getId())) {
                 var simpleNames = executionContext.getMessage("simpleName");
                 var code = """
                           static class %s implements RuntimeHintsRegistrar {
@@ -91,6 +77,7 @@ public class SerializationAotHintsRecipe extends Recipe {
                         .build();
                 for (var p : topLevelImports)
                     maybeAddImport(p);
+
                 return javaTemplate.apply(getCursor(), block.getCoordinates().lastStatement());
 
             }
@@ -130,10 +117,7 @@ public class SerializationAotHintsRecipe extends Recipe {
 
             return newClassDeclaration;
         }
-
-
     }
-
 
     @Override
     public String getDisplayName() {
