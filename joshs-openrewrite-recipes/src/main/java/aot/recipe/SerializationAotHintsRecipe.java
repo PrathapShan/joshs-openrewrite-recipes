@@ -35,11 +35,6 @@ public class SerializationAotHintsRecipe extends Recipe {
 
     private static Logger log = LoggerFactory.getLogger(SerializationAotHintsRecipe.class);
 
-    @Override
-    public TreeVisitor<?, ExecutionContext> getVisitor() {
-        return new SerializableIsoVisitor();
-    }
-
     static class SerializableIsoVisitor extends JavaVisitor<ExecutionContext> {
 
         @Override
@@ -114,8 +109,8 @@ public class SerializationAotHintsRecipe extends Recipe {
 
             return newClassDeclaration;
         }
-    }
 
+    }
     @Override
     public String getDisplayName() {
         return "RuntimeHints#serialization";
@@ -127,5 +122,10 @@ public class SerializationAotHintsRecipe extends Recipe {
                 Serializable.class.getName(),
                 RuntimeHints.class.getName()
         );
+    }
+
+    @Override
+    public TreeVisitor<?, ExecutionContext> getVisitor() {
+        return new SerializableIsoVisitor();
     }
 }
