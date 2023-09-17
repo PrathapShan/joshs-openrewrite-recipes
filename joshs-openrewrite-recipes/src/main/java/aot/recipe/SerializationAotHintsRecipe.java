@@ -35,6 +35,9 @@ public class SerializationAotHintsRecipe extends Recipe {
 
     private static Logger log = LoggerFactory.getLogger(SerializationAotHintsRecipe.class);
 
+    /**
+     * java docs
+     */
     static class SerializableIsoVisitor extends JavaVisitor<ExecutionContext> {
 
         @Override
